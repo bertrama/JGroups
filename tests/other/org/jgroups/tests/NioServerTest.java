@@ -14,11 +14,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * NIO based server for measuring heap-based vs direct byte buffers. Use {@link NioClient} as client test driver
+ * NIO based server for measuring heap-based vs direct byte buffers. Use {@link NioClientTest} as client test driver
  * @author Bela Ban
  * @since  3.6.4
  */
-public class NioServer {
+public class NioServerTest {
     protected ServerSocketChannel ch;
     protected Selector            selector;
     protected volatile boolean    running=true;
@@ -111,11 +111,11 @@ public class NioServer {
                 direct=Boolean.parseBoolean(args[++i]);
                 continue;
             }
-            System.out.println("NioServer [-direct true|false]");
+            System.out.println("NioServerTest [-direct true|false]");
             return;
         }
 
-        new NioServer().start(direct);
+        new NioServerTest().start(direct);
     }
 
 
