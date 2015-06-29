@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
  * Implementations should be able to be used to provide light weight NIO servers.
  * @param <T> The type of the address, e.g. {@link org.jgroups.Address}
  * @author Bela Ban
- * @since  3.6.4
+ * @since  3.6.5
  */
 
 public interface Server<T> {

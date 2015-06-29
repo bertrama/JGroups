@@ -56,9 +56,11 @@ public class NioServerTest {
                 it.remove();
                 if(key.isAcceptable()) {
                     SocketChannel client_ch=ch.accept();
-                    System.out.printf("accepted connection from %s\n", client_ch.getRemoteAddress());
-                    client_ch.configureBlocking(false);
-                    client_ch.register(selector, SelectionKey.OP_READ, create(SIZE, direct));
+                    if(client_ch != null) { // accept() may return null...
+                        System.out.printf("accepted connection from %s\n", client_ch.getRemoteAddress());
+                        client_ch.configureBlocking(false);
+                        client_ch.register(selector, SelectionKey.OP_READ, create(SIZE, direct));
+                    }
                 }
                 else if(key.isReadable()) {
                     if(!handle((SocketChannel)key.channel(), (ByteBuffer)key.attachment())) {

@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 /**
  * An impl of {@link Receiver}. Will get removed with the switch to Java 8; instead we'll use a default impl in Receiver
  * @author Bela Ban
- * @since  3.6.4
+ * @since  3.6.5
  */
 public class ReceiverAdapter<T> implements Receiver<T> {
     public void receive(T sender, byte[] buf, int offset, int length) {

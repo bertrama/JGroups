@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
  * Receiver interface to be used with {@link Server} implementations
  * @param <T> The type of the address, e.g. {@link org.jgroups.Address}
  * @author Bela Ban
- * @since  3.6.4
+ * @since  3.6.5
  */
 public interface Receiver<T> {
 
