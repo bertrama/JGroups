@@ -10,7 +10,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public abstract class AbstractConnectionMap<V extends Connection> implements ConnectionMap<V> {
+public abstract class AbstractConnectionMap<V extends Connection> {
         
     protected final List<ConnectionMapListener<V>> conn_listeners=new ArrayList<>();
     protected final Map<Address,V>                 conns=new HashMap<>();
@@ -31,7 +31,7 @@ public abstract class AbstractConnectionMap<V extends Connection> implements Con
         reaper=reaperInterval > 0?  new Reaper() : null;
     }
     
-    public Lock getLock(){
+    public Lock getLock() {
         return lock;
     }
     
@@ -39,6 +39,9 @@ public abstract class AbstractConnectionMap<V extends Connection> implements Con
     public boolean hasConnection(Address address) {
         return conns.containsKey(address);
     }
+
+    /** Creates a new connection to dest, or returns an existing one */
+    public abstract V getConnection(Address dest) throws Exception;
 
     public void addConnection(Address address, V conn) {
         V previous = conns.put(address, conn);
@@ -236,8 +239,8 @@ public abstract class AbstractConnectionMap<V extends Connection> implements Con
     }
 
     public interface ConnectionMapListener<V> {
-        public void connectionClosed(Address address);
-        public void connectionOpened(Address address, V conn);
+        void connectionClosed(Address address);
+        void connectionOpened(Address address, V conn);
 
     }
 }

@@ -150,7 +150,7 @@ public class TCPConnectionMap {
      * Therefore the receiver needs to be reentrant.
      */
     public void receive(Address sender, byte[] data, int offset, int length) {
-        recvr.receive(sender,data,offset,length);
+        recvr.receive(sender, data, offset, length);
     }
 
     public void send(Address dest, byte[] data, int offset, int length) throws Exception {        
@@ -752,6 +752,7 @@ public class TCPConnectionMap {
             super(factory,reaper_interval);            
         }
 
+        @Override
         public TCPConnection getConnection(Address dest) throws Exception {
             TCPConnection conn;
             getLock().lock();
