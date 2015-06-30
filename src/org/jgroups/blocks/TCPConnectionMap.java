@@ -10,7 +10,6 @@ import org.jgroups.util.*;
 import java.io.*;
 import java.net.*;
 import java.util.Collection;
-import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -136,11 +135,11 @@ public class TCPConnectionMap {
     public int              getSenderQueueSize()                    {return send_queue_size;}
     public TCPConnectionMap log(Log new_log)                        {this.log=new_log; return this;}
 
-    public void addConnectionMapListener(AbstractConnectionMap.ConnectionMapListener<TCPConnection> l) {
+    public void addConnectionMapListener(AbstractConnectionMap.ConnectionMapListener<Address,TCPConnection> l) {
         mapper.addConnectionMapListener(l);
     }
 
-    public void removeConnectionMapListener(AbstractConnectionMap.ConnectionMapListener<TCPConnection> l) {
+    public void removeConnectionMapListener(AbstractConnectionMap.ConnectionMapListener<Address,TCPConnection> l) {
         mapper.removeConnectionMapListener(l);
     }
 
@@ -343,9 +342,8 @@ public class TCPConnectionMap {
             else
                 sb.append(" and my address won as it's higher)");
         }
-        else {
+        else
             sb.append(" (connection didn't exist)");
-        }
         return sb.toString();
     }
 
@@ -742,7 +740,7 @@ public class TCPConnectionMap {
         }
     }
     
-    protected class Mapper extends AbstractConnectionMap<TCPConnection> {
+    protected class Mapper extends AbstractConnectionMap<Address,TCPConnection> {
 
         public Mapper(ThreadFactory factory) {
             super(factory);            
@@ -828,34 +826,7 @@ public class TCPConnectionMap {
             }
         }
 
-
-        public boolean connectionEstablishedTo(Address address) {
-            lock.lock();
-            try {
-                TCPConnection conn=conns.get(address);
-                return conn != null && conn.isConnected();
-            }
-            finally {
-                lock.unlock();
-            }
-        }
-
         public int size() {return conns.size();}
-
-        public String toString() {
-            StringBuilder sb=new StringBuilder();
-
-            getLock().lock();
-            try {
-                for(Map.Entry<Address,TCPConnection> entry: conns.entrySet()) {
-                    sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
-                }
-                return sb.toString();
-            }
-            finally {
-                getLock().unlock();
-            }
-        }
     }
 }
 

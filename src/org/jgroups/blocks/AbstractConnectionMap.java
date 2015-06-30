@@ -10,15 +10,20 @@ import java.util.Map.Entry;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public abstract class AbstractConnectionMap<V extends Connection> {
+/**
+ * Abstract class which handles connections and connection reaping
+ * @param <A> The type of the address, e.g. {@link Address}
+ * @param <V> The type of the connection, e.g. {@link org.jgroups.blocks.TCPConnectionMap.TCPConnection}
+ */
+public abstract class AbstractConnectionMap<A extends Address, V extends Connection> {
         
-    protected final List<ConnectionMapListener<V>> conn_listeners=new ArrayList<>();
-    protected final Map<Address,V>                 conns=new HashMap<>();
-    protected final Lock                           lock = new ReentrantLock(); // syncs conns
-    protected final Lock                           sock_creation_lock= new ReentrantLock(true); // syncs socket establishment
-    protected final ThreadFactory                  factory;
-    protected final long                           reaperInterval;
-    protected final Reaper                         reaper;
+    protected final List<ConnectionMapListener<A,V>> conn_listeners=new ArrayList<>();
+    protected final Map<A,V>                         conns=new HashMap<>();
+    protected final Lock                             lock=new ReentrantLock(); // syncs conns
+    protected final Lock                             sock_creation_lock= new ReentrantLock(true); // syncs socket establishment
+    protected final ThreadFactory                    factory;
+    protected final long                             reaperInterval;
+    protected final Reaper                           reaper;
 
     public AbstractConnectionMap(ThreadFactory factory) {
         this(factory,0);        
@@ -36,23 +41,45 @@ public abstract class AbstractConnectionMap<V extends Connection> {
     }
     
 
-    public boolean hasConnection(Address address) {
-        return conns.containsKey(address);
+    public boolean hasConnection(A address) {
+        lock.lock();
+        try {
+            return conns.containsKey(address);
+        }
+        finally {
+            lock.unlock();
+        }
+    }
+
+    public boolean connectionEstablishedTo(A address) {
+        lock.lock();
+        try {
+            V conn=conns.get(address);
+            return conn != null && conn.isConnected();
+        }
+        finally {
+            lock.unlock();
+        }
     }
 
     /** Creates a new connection to dest, or returns an existing one */
-    public abstract V getConnection(Address dest) throws Exception;
+    public abstract V getConnection(A dest) throws Exception;
 
-    public void addConnection(Address address, V conn) {
+    public void addConnection(A address, V conn) {
         V previous = conns.put(address, conn);
         Util.close(previous); // closes previous connection (if present)
         notifyConnectionOpened(address, conn);
     }
 
-    public void addConnectionMapListener(ConnectionMapListener<V> cml) {
+    public void addConnectionMapListener(ConnectionMapListener<A,V> cml) {
         if(cml != null && !conn_listeners.contains(cml))
             conn_listeners.add(cml);
-    } 
+    }
+
+    public void removeConnectionMapListener(ConnectionMapListener<A,V> cml) {
+        if(cml != null)
+            conn_listeners.remove(cml);
+    }
     
     public int getNumConnections() {
         lock.lock();
@@ -83,14 +110,12 @@ public abstract class AbstractConnectionMap<V extends Connection> {
 
         lock.lock();
         try {
-            for(Map.Entry<Address,V> entry: conns.entrySet()) {
+            for(Map.Entry<A,V> entry: conns.entrySet())
                 sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
-            }
         }
         finally {
             lock.unlock();
         }
-
         return sb.toString();
     }
 
@@ -100,7 +125,7 @@ public abstract class AbstractConnectionMap<V extends Connection> {
 
 
     /** Only removes the connection if conns.get(address) == conn */
-    public void removeConnectionIfPresent(Address address, V conn) {
+    public void removeConnectionIfPresent(A address, V conn) {
         if(address == null || conn == null)
             return;
 
@@ -117,21 +142,17 @@ public abstract class AbstractConnectionMap<V extends Connection> {
         }
     }
 
-    public void removeConnectionMapListener(ConnectionMapListener<V> cml) {
-        if(cml != null)
-            conn_listeners.remove(cml);
-    }
 
     /**
      * Removes all connections which are not in current_mbrs
      * 
      * @param current_mbrs
      */
-    public void retainAll(Collection<Address> current_mbrs) {
+    public void retainAll(Collection<A> current_mbrs) {
         if(current_mbrs == null)
             return;
 
-        Map<Address,V> copy=null;
+        Map<A,V> copy=null;
         lock.lock();
         try {
             copy=new HashMap<>(conns);
@@ -142,17 +163,16 @@ public abstract class AbstractConnectionMap<V extends Connection> {
         }   
         copy.keySet().removeAll(current_mbrs);
        
-        for(Iterator<Entry<Address,V>> i = copy.entrySet().iterator();i.hasNext();) {
-            Entry<Address,V> e = i.next();
+        for(Iterator<Entry<A,V>> i = copy.entrySet().iterator();i.hasNext();) {
+            Entry<A,V> e = i.next();
             Util.close(e.getValue());      
         }
         copy.clear();
     }
     
     public void start() throws Exception {
-        if(reaper != null) {                      
+        if(reaper != null)
             reaper.start();
-        }
     }
 
     public void stop() {
@@ -161,8 +181,8 @@ public abstract class AbstractConnectionMap<V extends Connection> {
 
         lock.lock();
         try {
-            for(Iterator<Entry<Address,V>> i = conns.entrySet().iterator();i.hasNext();) {
-                Entry<Address,V> e = i.next();
+            for(Iterator<Entry<A,V>> i = conns.entrySet().iterator();i.hasNext();) {
+                Entry<A,V> e = i.next();
                 Util.close(e.getValue());          
             }
             clear();
@@ -183,18 +203,33 @@ public abstract class AbstractConnectionMap<V extends Connection> {
         }
     }
 
-    protected void notifyConnectionClosed(Address address) {
-        for(ConnectionMapListener<V> l:conn_listeners) {
+    protected void notifyConnectionClosed(A address) {
+        for(ConnectionMapListener<A,V> l:conn_listeners)
             l.connectionClosed(address);
+    }
+
+    protected void notifyConnectionOpened(A address, V conn) {
+        for(ConnectionMapListener<A,V> l:conn_listeners)
+            l.connectionOpened(address, conn);
+    }
+
+
+    public String toString() {
+        StringBuilder sb=new StringBuilder();
+        getLock().lock();
+        try {
+            for(Map.Entry<A,V> entry: conns.entrySet())
+                sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            return sb.toString();
+        }
+        finally {
+            getLock().unlock();
         }
     }
 
-    protected void notifyConnectionOpened(Address address, V conn) {
-        for(ConnectionMapListener<V> l:conn_listeners)
-            l.connectionOpened(address, conn);
-    }
-        
-    
+
+
+
     class Reaper implements Runnable {
         private Thread thread;
 
@@ -221,8 +256,8 @@ public abstract class AbstractConnectionMap<V extends Connection> {
             while(!Thread.currentThread().isInterrupted()) {
                 lock.lock();
                 try {
-                    for(Iterator<Entry<Address,V>> it=conns.entrySet().iterator();it.hasNext();) {
-                        Entry<Address,V> entry=it.next();
+                    for(Iterator<Entry<A,V>> it=conns.entrySet().iterator();it.hasNext();) {
+                        Entry<A,V> entry=it.next();
                         V c=entry.getValue();
                         if(c.isExpired(System.nanoTime())) {
                             Util.close(c);
@@ -238,9 +273,9 @@ public abstract class AbstractConnectionMap<V extends Connection> {
         }
     }
 
-    public interface ConnectionMapListener<V> {
-        void connectionClosed(Address address);
-        void connectionOpened(Address address, V conn);
+    public interface ConnectionMapListener<A extends Address, V extends Connection> {
+        void connectionClosed(A address);
+        void connectionOpened(A address, V conn);
 
     }
 }
