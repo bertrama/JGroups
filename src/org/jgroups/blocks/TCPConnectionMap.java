@@ -9,7 +9,6 @@ import org.jgroups.util.*;
 
 import java.io.*;
 import java.net.*;
-import java.util.Collection;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -21,16 +20,14 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Vladimir Blagojevic
  * @author Bela Ban
  */
-public class TCPConnectionMap {
-    protected final Mapper        mapper;
-    protected final InetAddress   bind_addr;
+public class TCPConnectionMap extends AbstractConnectionMap<Address,TCPConnectionMap.TCPConnection> {
     protected InetAddress         client_bind_addr;
     protected int                 client_bind_port;
     protected boolean             defer_client_binding;
     protected final Address       local_addr; // bind_addr + port of srv_sock
     protected final ServerSocket  srv_sock;
     protected Receiver            recvr;
-    protected final long          conn_expire_time;  // ns
+    protected long                conn_expire_time;  // ns
     protected Log                 log=LogFactory.getLog(getClass());
     protected int                 recv_buf_size=120000;
     protected int                 send_buf_size=60000;
@@ -46,49 +43,16 @@ public class TCPConnectionMap {
     protected TimeService         time_service;
 
 
-    public TCPConnectionMap(String service_name,
-                            ThreadFactory f,
-                            SocketFactory socket_factory,
-                            Receiver r,
-                            InetAddress bind_addr,
-                            InetAddress external_addr,
-                            int external_port,
-                            int srv_port,
-                            int max_port
-                            ) throws Exception {
-        this(service_name, f,socket_factory, r,bind_addr,external_addr,external_port, srv_port,max_port,0,0);
+    public TCPConnectionMap(InetAddress bind_addr, int port) throws Exception {
+        this("jgroups.tcp.connectionmap", new DefaultThreadFactory("tcp", true), new DefaultSocketFactory(), null, bind_addr, null, 0, port, port+50, 0, 0);
     }
 
-    public TCPConnectionMap(String service_name,
-                            ThreadFactory f,
-                            Receiver r,
-                            InetAddress bind_addr,
-                            InetAddress external_addr,
-                            int external_port,
-                            int srv_port,
-                            int max_port,
-                            long reaper_interval,
-                            long conn_expire_time
-                            ) throws Exception {
-        this(service_name, f, null, r, bind_addr, external_addr, external_port, srv_port, max_port, reaper_interval, conn_expire_time);
-    }
-
-    public TCPConnectionMap(String service_name,
-                            ThreadFactory f,
-                            SocketFactory socket_factory,
-                            Receiver r,
-                            InetAddress bind_addr,
-                            InetAddress external_addr,
-                            int external_port,
-                            int srv_port,
-                            int max_port,
-                            long reaper_interval,
-                            long conn_expire_time
-                            ) throws Exception {
-        this.mapper = new Mapper(f,reaper_interval);
+    public TCPConnectionMap(String service_name, ThreadFactory f, SocketFactory socket_factory, Receiver r,
+                            InetAddress bind_addr, InetAddress external_addr, int external_port, int srv_port, int max_port,
+                            long reaper_interval, long conn_expire_time) throws Exception {
+        super(f,reaper_interval);
         this.recvr=r;
-        this.bind_addr=bind_addr;
-        this.conn_expire_time = TimeUnit.NANOSECONDS.convert(conn_expire_time, TimeUnit.MILLISECONDS);
+        this.conn_expire_time=TimeUnit.NANOSECONDS.convert(conn_expire_time, TimeUnit.MILLISECONDS);
         if(socket_factory != null)
             this.socket_factory=socket_factory;
         this.srv_sock=Util.createServerSocket(this.socket_factory, service_name, bind_addr, srv_port, max_port);
@@ -107,114 +71,35 @@ public class TCPConnectionMap {
         acceptor=f.newThread(new Acceptor(),"ConnectionMap.Acceptor [" + local_addr + "]");
     }
 
-    public Address          getLocalAddress()                       {return local_addr;}
-    public Receiver         getReceiver()                           {return recvr;}
-    public void             setReceiver(Receiver receiver)          {this.recvr=receiver;}
-    public SocketFactory    getSocketFactory()                      {return socket_factory;}
-    public void             setSocketFactory(SocketFactory factory) {this.socket_factory=factory;}
-    public InetAddress      clientBindAddress()                     {return client_bind_addr;}
-    public TCPConnectionMap clientBindAddress(InetAddress addr)     {this.client_bind_addr=addr; return this;}
-    public int              clientBindPort()                        {return client_bind_port;}
-    public TCPConnectionMap clientBindPort(int port)                {this.client_bind_port=port; return this;}
-    public boolean          deferClientBinding()                    {return defer_client_binding;}
-    public TCPConnectionMap deferClientBinding(boolean defer)       {this.defer_client_binding=defer; return this;}
-    public void             setReceiveBufferSize(int recv_buf_size) {this.recv_buf_size = recv_buf_size;}
-    public void             setSocketConnectionTimeout(int timeout) {this.sock_conn_timeout = timeout;}
-    public TCPConnectionMap peerAddressReadTimeout(int timeout)     {this.peer_addr_read_timeout=timeout; return this;}
-    public TCPConnectionMap timeService(TimeService ts)             {this.time_service=ts; return this;}
-    public void             setSendBufferSize(int send_buf_size)    {this.send_buf_size = send_buf_size;}
-    public void             setLinger(int linger)                   {this.linger = linger;}
-    public void             setTcpNodelay(boolean tcp_nodelay)      {this.tcp_nodelay = tcp_nodelay;}
-    public void             setSendQueueSize(int send_queue_size)   {this.send_queue_size = send_queue_size;}
-    public void             setUseSendQueues(boolean flag)          {this.use_send_queues=flag;}
-    public int              getNumConnections()                     {return mapper.getNumConnections();}
-    public int              getNumOpenConnections()                 {return mapper.getNumOpenConnections();}
-    public boolean          connectionEstablishedTo(Address addr)   {return mapper.connectionEstablishedTo(addr);}
-    public String           printConnections()                      {return mapper.printConnections();}
-    public void             retainAll(Collection<Address> members)  {mapper.retainAll(members);}
-    public int              getSenderQueueSize()                    {return send_queue_size;}
-    public TCPConnectionMap log(Log new_log)                        {this.log=new_log; return this;}
+    public Address           getLocalAddress()                       {return local_addr;}
+    public Receiver          getReceiver()                           {return recvr;}
+    public TCPConnectionMap  setReceiver(Receiver receiver)          {this.recvr=receiver; return this;}
+    public SocketFactory     getSocketFactory()                      {return socket_factory;}
+    public TCPConnectionMap  setSocketFactory(SocketFactory factory) {this.socket_factory=factory; return this;}
+    public InetAddress       clientBindAddress()                     {return client_bind_addr;}
+    public TCPConnectionMap  clientBindAddress(InetAddress addr)     {this.client_bind_addr=addr; return this;}
+    public int               clientBindPort()                        {return client_bind_port;}
+    public TCPConnectionMap  clientBindPort(int port)                {this.client_bind_port=port; return this;}
+    public boolean           deferClientBinding()                    {return defer_client_binding;}
+    public TCPConnectionMap  deferClientBinding(boolean defer)       {this.defer_client_binding=defer; return this;}
+    public TCPConnectionMap  setReceiveBufferSize(int recv_buf_size) {this.recv_buf_size = recv_buf_size; return this;}
+    public TCPConnectionMap  setSocketConnectionTimeout(int timeout) {this.sock_conn_timeout = timeout; return this;}
+    public TCPConnectionMap  setConnExpireTimeout(long t)            {conn_expire_time=TimeUnit.NANOSECONDS.convert(t, TimeUnit.MILLISECONDS); return this;}
+    public TCPConnectionMap  peerAddressReadTimeout(int timeout)     {this.peer_addr_read_timeout=timeout; return this;}
+    public TCPConnectionMap  timeService(TimeService ts)             {this.time_service=ts; return this;}
+    public TCPConnectionMap  setSendBufferSize(int send_buf_size)    {this.send_buf_size = send_buf_size; return this;}
+    public TCPConnectionMap  setLinger(int linger)                   {this.linger=linger; return this;}
+    public TCPConnectionMap  setTcpNodelay(boolean tcp_nodelay)      {this.tcp_nodelay = tcp_nodelay; return this;}
+    public TCPConnectionMap  setSendQueueSize(int send_queue_size)   {this.send_queue_size = send_queue_size; return this;}
+    public TCPConnectionMap  setUseSendQueues(boolean flag)          {this.use_send_queues=flag; return this;}
+    public int               getSenderQueueSize()                    {return send_queue_size;}
+    public TCPConnectionMap  log(Log new_log)                        {this.log=new_log; return this;}
 
-    public void addConnectionMapListener(AbstractConnectionMap.ConnectionMapListener<Address,TCPConnection> l) {
-        mapper.addConnectionMapListener(l);
-    }
 
-    public void removeConnectionMapListener(AbstractConnectionMap.ConnectionMapListener<Address,TCPConnection> l) {
-        mapper.removeConnectionMapListener(l);
-    }
-
-    /**
-     * Calls the receiver callback. We do not serialize access to this method,
-     * and it may be called concurrently by several Connection handler threads.
-     * Therefore the receiver needs to be reentrant.
-     */
-    public void receive(Address sender, byte[] data, int offset, int length) {
-        recvr.receive(sender, data, offset, length);
-    }
-
-    public void send(Address dest, byte[] data, int offset, int length) throws Exception {        
-        if(dest == null) {
-            if(log.isErrorEnabled())
-                log.error(local_addr +  ": destination is null");
-            return;
-        }
-
-        if(data == null) {
-            log.warn(local_addr + ": data is null; discarding message to " + dest);
-            return;
-        }      
-        
-        if(!running.get() ) {
-            if(log.isDebugEnabled())
-                log.debug(local_addr + ": connection table is not running, discarding message to " + dest);
-            return;
-        }
-
-        if(dest.equals(local_addr)) {
-            receive(local_addr, data, offset, length);
-            return;
-        }
-
-        // 1. Try to obtain correct Connection (or create one if not yet existent)
-        TCPConnection conn=null;
-        try {
-            conn=mapper.getConnection(dest);
-        }
-        catch(Throwable t) {
-        }
-
-        // 2. Send the message using that connection
-        if(conn != null && !conn.isConnected()) { // perhaps not connected because of concurrent connections (JGRP-1549)
-            Util.sleepRandom(1, 50);
-            try {
-                conn=mapper.getConnection(dest); // try one more time
-            }
-            catch(Throwable t) {
-            }
-        }
-
-        if(conn != null) {
-            try {
-                conn.send(data, offset, length);
-            }
-            catch(Exception ex) {
-                mapper.removeConnectionIfPresent(dest,conn);
-                throw ex;
-            }
-        }
-    }
-
-    /** Flushes the TCPConnection associated with destination */
-    public void flush(Address destination) throws Exception {
-        TCPConnection conn=mapper.getConnection(destination);
-        if(conn != null)
-            conn.flush();
-    }
-
-    public void start() throws Exception {        
+    public void start() throws Exception {
         if(running.compareAndSet(false, true)) {
             acceptor.start();
-            mapper.start();
+            super.start();
         }
     }
 
@@ -226,18 +111,151 @@ public class TCPConnectionMap {
             catch(IOException e) {
             }
             Util.interruptAndWaitToDie(acceptor);
-            mapper.stop();
+            super.stop();
         }
     }
 
 
+    /**
+     * Calls the receiver callback. We do not serialize access to this method,
+     * and it may be called concurrently by several Connection handler threads.
+     * Therefore the receiver needs to be reentrant.
+     */
+    public void receive(Address sender, byte[] data, int offset, int length) {
+        if(this.recvr != null)
+            recvr.receive(sender, data, offset, length);
+    }
+
+    public void send(Address dest, byte[] data, int offset, int length) throws Exception {        
+        if(dest == null) {
+            log.error("%s: destination is null", local_addr);
+            return;
+        }
+
+        if(data == null) {
+            log.warn("%s: data is null; discarding message to %s", local_addr, dest);
+            return;
+        }      
+        
+        if(!running.get() ) {
+            log.debug("%s: connection table is not running, discarding message to %s", local_addr, dest);
+            return;
+        }
+
+        if(dest.equals(local_addr)) {
+            receive(local_addr, data, offset, length);
+            return;
+        }
+
+        // 1. Try to obtain correct Connection (or create one if not yet existent)
+        TCPConnection conn=null;
+        try {
+            conn=getConnection(dest);
+        }
+        catch(Throwable t) {
+        }
+
+        // 2. Send the message using that connection
+        if(conn != null && !conn.isConnected()) { // perhaps not connected because of concurrent connections (JGRP-1549)
+            Util.sleepRandom(1, 50);
+            try {
+                conn=getConnection(dest); // try one more time
+            }
+            catch(Throwable t) {
+            }
+        }
+
+        if(conn != null) {
+            try {
+                conn.send(data, offset, length);
+            }
+            catch(Exception ex) {
+                removeConnectionIfPresent(dest, conn);
+                throw ex;
+            }
+        }
+    }
+
+    /** Flushes the TCPConnection associated with destination */
+    public void flush(Address destination) throws Exception {
+        TCPConnection conn=getConnection(destination);
+        if(conn != null)
+            conn.flush();
+    }
+
+
+    @Override
+    public TCPConnection getConnection(Address dest) throws Exception {
+        TCPConnection conn;
+        lock.lock();
+        try {
+            if((conn=conns.get(dest)) != null && conn.isOpen()) // keep FAST path on the most common case
+                return conn;
+        }
+        finally {
+            lock.unlock();
+        }
+
+        Exception connect_exception=null; // set if connect() throws an exception
+        sock_creation_lock.lockInterruptibly();
+        try {
+            // lock / release, create new conn under sock_creation_lock, it can be skipped but then it takes
+            // extra check in conn map and closing the new connection, w/ sock_creation_lock it looks much simpler
+            // (slow path, so not important)
+
+            lock.lock();
+            try {
+                conn=conns.get(dest); // check again after obtaining sock_creation_lock
+                if(conn != null && conn.isOpen())
+                    return conn;
+
+                // create conn stub
+                conn=new TCPConnection(dest);
+                addConnection(dest, conn);
+            }
+            finally {
+                lock.unlock();
+            }
+
+            // now connect to dest:
+            try {
+                log.trace("%s: connecting to %s", local_addr, dest);
+                conn.connect(new InetSocketAddress(((IpAddress)dest).getIpAddress(), ((IpAddress)dest).getPort()));
+                conn.start(getThreadFactory());
+            }
+            catch(Exception connect_ex) {
+                connect_exception=connect_ex;
+            }
+
+            lock.lock();
+            try {
+                TCPConnection existing_conn=conns.get(dest); // check again after obtaining sock_creation_lock
+                if(existing_conn != null && existing_conn.isOpen() // added by a successful accept()
+                  && existing_conn != conn) {
+                    log.trace("%s: found existing connection to %s, using it and deleting own conn-stub", local_addr, dest);
+                    Util.close(conn); // close our connection; not really needed as conn was closed by accept()
+                    return existing_conn;
+                }
+
+                if(connect_exception != null) {
+                    log.trace("%s: failed connecting to %s: %s", local_addr, dest, connect_exception);
+                    removeConnectionIfPresent(dest, conn); // removes and closes the conn
+                    throw connect_exception;
+                }
+                return conn;
+            }
+            finally {
+                lock.unlock();
+            }
+        }
+        finally {
+            sock_creation_lock.unlock();
+        }
+    }
+
     public String toString() {
-        StringBuilder ret=new StringBuilder();
-        ret.append("local_addr=" + local_addr).append("\n");
-        ret.append("connections (" + mapper.size() + "):\n");
-        ret.append(mapper.toString());
-        ret.append('\n');
-        return ret.toString();
+        return new StringBuilder("local_addr=").append(local_addr).append("\n")
+          .append("connections (" + conns.size() + "):\n").append(super.toString()).append('\n').toString();
     }
 
     
@@ -246,14 +264,13 @@ public class TCPConnectionMap {
             client_sock.setSendBufferSize(send_buf_size);
         }
         catch(IllegalArgumentException ex) {
-            if(log.isErrorEnabled())
-                log.error(local_addr + ": exception setting send buffer size to " + send_buf_size + " bytes", ex);
+            log.error("%s: exception setting send buffer to %d bytes: %s", local_addr, send_buf_size, ex);
         }
         try {
             client_sock.setReceiveBufferSize(recv_buf_size);
         }
         catch(IllegalArgumentException ex) {
-            log.error(local_addr + ": exception setting receive buffer size to " + send_buf_size + " bytes", ex);
+            log.error("%s: exception setting receive buffer to %d bytes: %s", local_addr, recv_buf_size, ex);
         }
 
         client_sock.setKeepAlive(true);
@@ -287,8 +304,7 @@ public class TCPConnectionMap {
                 catch(Exception ex) {
                     if(ex instanceof SocketException && srv_sock.isClosed() || Thread.currentThread().isInterrupted())
                         break;
-                    if(log.isWarnEnabled())
-                        log.warn(Util.getMessage("AcceptError"), ex);
+                    log.warn(Util.getMessage("AcceptError"), ex);
                     Util.close(client_sock);
                 }
             }
@@ -300,29 +316,24 @@ public class TCPConnectionMap {
             try {
                 conn=new TCPConnection(client_sock);
                 Address peer_addr=conn.getPeerAddress();
-                if(log.isTraceEnabled())
-                    log.trace(local_addr + ": " + peer_addr + " trying to connect to me");
-                mapper.getLock().lock();
+                log.trace("%s: %s trying to connect to me", local_addr, peer_addr);
+                lock.lock();
                 try {
-                    boolean conn_exists=mapper.hasConnection(peer_addr),
+                    boolean conn_exists=hasConnection(peer_addr),
                       replace=conn_exists && local_addr.compareTo(peer_addr) < 0; // bigger conn wins
 
                     if(!conn_exists || replace) {
-                        mapper.addConnection(peer_addr, conn); // closes old conn
-                        conn.start(mapper.getThreadFactory());
-                        if(log.isTraceEnabled())
-                            log.trace(local_addr + ": accepted connection from " + peer_addr +
-                                        explanation(conn_exists, replace));
+                        addConnection(peer_addr, conn); // closes old conn
+                        conn.start(getThreadFactory());
+                        log.trace("%s: accepted connection from %s %s", local_addr, peer_addr, explanation(conn_exists, replace));
                     }
                     else {
-                        if(log.isTraceEnabled())
-                            log.trace(local_addr + ": rejected connection from " + peer_addr +
-                                        explanation(conn_exists, replace));
+                        log.trace("%s: rejected connection from %s %s", local_addr, peer_addr, explanation(conn_exists, replace));
                         Util.close(conn); // keep our existing conn, reject accept() and close client_sock
                     }
                 }
                 finally {
-                    mapper.getLock().unlock();
+                    lock.unlock();
                 }
             }
             catch(Exception ex) {
@@ -600,7 +611,7 @@ public class TCPConnectionMap {
                     }
                 }
                 finally {
-                    mapper.removeConnectionIfPresent(peer_addr,TCPConnection.this);
+                    removeConnectionIfPresent(peer_addr, TCPConnection.this);
                 }
             }
         }
@@ -619,7 +630,7 @@ public class TCPConnectionMap {
             public void addToQueue(byte[] data) throws Exception{
                 if(canRun())
                     if (!send_queue.offer(data, sock_conn_timeout, TimeUnit.MILLISECONDS))
-                        log.warn("Discarding message because TCP send_queue is full and hasn't been releasing for " + sock_conn_timeout + " ms");
+                        log.warn("%s: discarding message because TCP send_queue is full and hasn't been releasing for %d ms", local_addr, sock_conn_timeout);
             }
 
             public Sender start() {
@@ -664,7 +675,7 @@ public class TCPConnectionMap {
                     }    
                 }
                 finally {
-                    mapper.removeConnectionIfPresent(peer_addr, TCPConnection.this);
+                    removeConnectionIfPresent(peer_addr, TCPConnection.this);
                 }                
             }
         }
@@ -736,97 +747,10 @@ public class TCPConnectionMap {
             finally {
                 send_lock.unlock();
             }
-            mapper.notifyConnectionClosed(peer_addr);
+            notifyConnectionClosed(peer_addr);
         }
     }
     
-    protected class Mapper extends AbstractConnectionMap<Address,TCPConnection> {
 
-        public Mapper(ThreadFactory factory) {
-            super(factory);            
-        }
-        
-        public Mapper(ThreadFactory factory,long reaper_interval) {
-            super(factory,reaper_interval);            
-        }
-
-        @Override
-        public TCPConnection getConnection(Address dest) throws Exception {
-            TCPConnection conn;
-            getLock().lock();
-            try {
-                if((conn=conns.get(dest)) != null && conn.isOpen()) // keep FAST path on the most common case
-                    return conn;
-            }
-            finally {
-                getLock().unlock();
-            }
-
-            Exception connect_exception=null; // set if connect() throws an exception
-            sock_creation_lock.lockInterruptibly();
-            try {
-                // lock / release, create new conn under sock_creation_lock, it can be skipped but then it takes
-                // extra check in conn map and closing the new connection, w/ sock_creation_lock it looks much simpler
-                // (slow path, so not important)
-
-                getLock().lock();
-                try {
-                    conn=conns.get(dest); // check again after obtaining sock_creation_lock
-                    if(conn != null && conn.isOpen())
-                        return conn;
-
-                    // create conn stub
-                    conn=new TCPConnection(dest);
-                    addConnection(dest, conn);
-                }
-                finally {
-                    getLock().unlock();
-                }
-
-                // now connect to dest:
-                try {
-                    if(log.isTraceEnabled())
-                        log.trace(local_addr + ": connecting to " + dest);
-                    conn.connect(new InetSocketAddress(((IpAddress)dest).getIpAddress(),((IpAddress)dest).getPort()));
-                    conn.start(getThreadFactory());
-                    if(log.isTraceEnabled())
-                        log.trace(local_addr + ": connected to " + dest);
-
-                }
-                catch(Exception connect_ex) {
-                    connect_exception=connect_ex;
-                }
-
-                getLock().lock();
-                try {
-                    TCPConnection existing_conn=conns.get(dest); // check again after obtaining sock_creation_lock
-                    if(existing_conn != null && existing_conn.isOpen() // added by a successful accept()
-                      && existing_conn != conn) {
-                        if(log.isTraceEnabled())
-                            log.trace(local_addr + ": found existing connection to " + dest +
-                                        ", using it and deleting own conn-stub");
-                        Util.close(conn); // close our connection; not really needed as conn was closed by accept()
-                        return existing_conn;
-                    }
-
-                    if(connect_exception != null) {
-                        if(log.isTraceEnabled())
-                            log.trace(local_addr + ": failed connecting to " + dest + ": " + connect_exception);
-                        removeConnectionIfPresent(dest, conn); // removes and closes the conn
-                        throw connect_exception;
-                    }
-                    return conn;
-                }
-                finally {
-                    getLock().unlock();
-                }
-            }
-            finally {
-                sock_creation_lock.unlock();
-            }
-        }
-
-        public int size() {return conns.size();}
-    }
 }
 

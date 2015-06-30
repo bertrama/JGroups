@@ -6,8 +6,6 @@ import org.jgroups.Address;
 import org.jgroups.Global;
 import org.jgroups.blocks.TCPConnectionMap;
 import org.jgroups.stack.IpAddress;
-import org.jgroups.util.DefaultSocketFactory;
-import org.jgroups.util.DefaultThreadFactory;
 import org.jgroups.util.ResourceManager;
 import org.jgroups.util.Util;
 import org.testng.annotations.AfterMethod;
@@ -44,8 +42,8 @@ public class TCPConnectionMapTest extends BMNGRunner {
         B=new IpAddress(loopback, PORT_B);
         System.out.println("A=" + A + ", B=" + B);
         assert A.compareTo(B) < 0;
-        conn_a=createConnectionMap(loopback, PORT_A);
-        conn_b=createConnectionMap(loopback, PORT_B);
+        conn_a=new TCPConnectionMap(loopback, PORT_A);
+        conn_b=new TCPConnectionMap(loopback, PORT_B);
         receiver_a=new MyReceiver("A"); receiver_b=new MyReceiver("B");
     }
 
@@ -146,10 +144,6 @@ public class TCPConnectionMapTest extends BMNGRunner {
     }
 
 
-    protected TCPConnectionMap createConnectionMap(InetAddress bind_addr, int port) throws Exception {
-        return new TCPConnectionMap("conn", new DefaultThreadFactory("ConnectionMapTest", true, true),
-                                    new DefaultSocketFactory(), null, bind_addr, null, 0, port,port);
-    }
 
     protected void check(List<String> list, String expected_str) {
         for(int i=0; i < 20; i++) {

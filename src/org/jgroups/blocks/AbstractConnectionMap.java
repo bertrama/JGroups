@@ -20,26 +20,48 @@ public abstract class AbstractConnectionMap<A extends Address, V extends Connect
     protected final List<ConnectionMapListener<A,V>> conn_listeners=new ArrayList<>();
     protected final Map<A,V>                         conns=new HashMap<>();
     protected final Lock                             lock=new ReentrantLock(); // syncs conns
-    protected final Lock                             sock_creation_lock= new ReentrantLock(true); // syncs socket establishment
+    protected final Lock                             sock_creation_lock=new ReentrantLock(true); // syncs socket establishment
     protected final ThreadFactory                    factory;
-    protected final long                             reaperInterval;
+    protected long                                   reaperInterval;
     protected final Reaper                           reaper;
 
     public AbstractConnectionMap(ThreadFactory factory) {
         this(factory,0);        
     }
     
-    public AbstractConnectionMap(ThreadFactory factory,long reaperInterval) {
+    public AbstractConnectionMap(ThreadFactory factory, long reaperInterval) {
         super();
         this.factory=factory;        
         this.reaperInterval=reaperInterval;
         reaper=reaperInterval > 0?  new Reaper() : null;
     }
-    
-    public Lock getLock() {
-        return lock;
+
+    public long getReaperInterval() {return reaperInterval;}
+    public AbstractConnectionMap<A,V> setReaperInterval(long interval) {this.reaperInterval=interval; return this;}
+
+    public void start() throws Exception {
+        if(reaper != null)
+            reaper.start();
     }
-    
+
+    public void stop() {
+        if(reaper != null)
+            reaper.stop();
+
+        lock.lock();
+        try {
+            for(Iterator<Entry<A,V>> i = conns.entrySet().iterator();i.hasNext();) {
+                Entry<A,V> e = i.next();
+                Util.close(e.getValue());
+            }
+            clear();
+        }
+        finally {
+            lock.unlock();
+        }
+        conn_listeners.clear();
+    }
+
 
     public boolean hasConnection(A address) {
         lock.lock();
@@ -170,28 +192,6 @@ public abstract class AbstractConnectionMap<A extends Address, V extends Connect
         copy.clear();
     }
     
-    public void start() throws Exception {
-        if(reaper != null)
-            reaper.start();
-    }
-
-    public void stop() {
-        if(reaper != null)
-            reaper.stop();
-
-        lock.lock();
-        try {
-            for(Iterator<Entry<A,V>> i = conns.entrySet().iterator();i.hasNext();) {
-                Entry<A,V> e = i.next();
-                Util.close(e.getValue());          
-            }
-            clear();
-        }
-        finally {
-            lock.unlock();
-        }           
-        conn_listeners.clear();
-    }
 
     protected void clear() {
         lock.lock();
@@ -216,21 +216,21 @@ public abstract class AbstractConnectionMap<A extends Address, V extends Connect
 
     public String toString() {
         StringBuilder sb=new StringBuilder();
-        getLock().lock();
+        lock.lock();
         try {
             for(Map.Entry<A,V> entry: conns.entrySet())
                 sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
             return sb.toString();
         }
         finally {
-            getLock().unlock();
+            lock.unlock();
         }
     }
 
 
 
 
-    class Reaper implements Runnable {
+    protected class Reaper implements Runnable {
         private Thread thread;
 
         public synchronized void start() {

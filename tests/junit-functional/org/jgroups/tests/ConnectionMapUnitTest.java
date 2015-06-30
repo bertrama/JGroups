@@ -5,7 +5,6 @@ package org.jgroups.tests;
 import org.jgroups.Address;
 import org.jgroups.Global;
 import org.jgroups.blocks.TCPConnectionMap;
-import org.jgroups.util.DefaultThreadFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -22,29 +21,18 @@ public class ConnectionMapUnitTest {
 
     @BeforeMethod
     protected void setUp() throws Exception {
-        ct1=new TCPConnectionMap("TCPConnectionMap1",
-                                 new DefaultThreadFactory("test", true),
-                                 null, null, null, null, 0, port1, port1);
-
-        ct1.setUseSendQueues(false);
+        ct1=new TCPConnectionMap(null, port1).setUseSendQueues(false);
         ct1.start();
-        ct2=new TCPConnectionMap("TCPConnectionMap2",
-                                 new DefaultThreadFactory("test2", true),
-                                 null, null, null, null, 0, port2, port2);
-        ct2.setUseSendQueues(false);
+        ct2=new TCPConnectionMap(null, port2).setUseSendQueues(false);
         ct2.start();
     }
 
     @AfterMethod
     void tearDown() throws Exception {
-        if(ct1 != null) {
+        if(ct1 != null)
             ct1.stop();
-            ct1=null;
-        }
-        if(ct2 != null) {
+        if(ct2 != null)
             ct2.stop();
-            ct2=null;
-        }
     }
 
     public void testSetup() {
@@ -143,9 +131,10 @@ public class ConnectionMapUnitTest {
 
 
 
-    static class MyReceiver implements TCPConnectionMap.Receiver {
+    protected static class MyReceiver implements TCPConnectionMap.Receiver {
         long             num_expected=0, num_received=0, start_time=0, stop_time=0;
-        boolean          done=false, send_response=false;
+        volatile boolean done=false;
+        boolean          send_response=false;
         long             modulo;
         TCPConnectionMap ct;
 

@@ -3,7 +3,6 @@ package org.jgroups.blocks;
 import org.jgroups.Address;
 import org.jgroups.Global;
 import org.jgroups.stack.IpAddress;
-import org.jgroups.util.DefaultThreadFactory;
 import org.jgroups.util.ResourceManager;
 import org.jgroups.util.StackType;
 import org.jgroups.util.Util;
@@ -58,14 +57,10 @@ public class ConnectionMapTest {
 
     @AfterMethod
     protected void tearDown() throws Exception {
-        if(ct2 != null) {
+        if(ct2 != null)
             ct2.stop();
-            ct2=null;
-        }
-        if(ct1 != null) {
+        if(ct1 != null)
             ct1.stop();
-            ct1=null;
-        }
     }
 
     /**
@@ -74,18 +69,9 @@ public class ConnectionMapTest {
      * Turned concurrent test into a simple sequential test. We're going to replace this code with NIO2 soon anyway...
      */
     public void testReuseOfConnection() throws Exception {
-        TCPConnectionMap.Receiver dummy=new TCPConnectionMap.Receiver() {
-            public void receive(Address sender, byte[] data, int offset, int length) {}
-        };
-
-        ct1=new TCPConnectionMap("ConnectionMapTest1",
-                                 new DefaultThreadFactory("ConnectionMapTest", true),
-                                 null, dummy, loopback_addr, null, 0, PORT1, PORT1);
+        ct1=new TCPConnectionMap(loopback_addr, PORT1);
         ct1.start();
-        
-        ct2=new TCPConnectionMap("ConnectionMapTest2",
-                                 new DefaultThreadFactory("ConnectionMapTest", true),
-                                 null, dummy, loopback_addr, null, 0, PORT2, PORT2);
+        ct2=new TCPConnectionMap(loopback_addr, PORT2);
         ct2.start();
         
         int num_conns;
@@ -138,50 +124,25 @@ public class ConnectionMapTest {
 
 
     public void testStopConnectionMapNoSendQueues() throws Exception {
-        ct1=new TCPConnectionMap("ConnectionMapTest1",
-                                 new DefaultThreadFactory("ConnectionMapTest", true),
-                                 new DummyReceiver(), loopback_addr, null, 0, PORT1, PORT1, 60000, 120000);
-        ct1.setUseSendQueues(false);
+        ct1=new TCPConnectionMap(loopback_addr, PORT1).setConnExpireTimeout(120000).setUseSendQueues(false);
+        ct1.setReaperInterval(60000);
         ct1.start();
-        ct2=new TCPConnectionMap("ConnectionMapTest2",
-                                 new DefaultThreadFactory("ConnectionMapTest", true),
-                                 new DummyReceiver(), loopback_addr, null, 0, PORT2, PORT2, 60000, 120000);
-        ct2.setUseSendQueues(false);
+        ct2=new TCPConnectionMap(loopback_addr, PORT2).setUseSendQueues(false).setConnExpireTimeout(120000);
+        ct2.setReaperInterval(60000);
         ct2.start();
         _testStop(ct1, ct2);
     }
 
     public void testStopConnectionMapWithSendQueues() throws Exception {
-        ct1=new TCPConnectionMap("ConnectionMapTest1",
-                                 new DefaultThreadFactory("ConnectionMapTest", true),
-                                 new DummyReceiver(), loopback_addr, null, 0, PORT1, PORT1, 60000, 120000);
+        ct1=new TCPConnectionMap(loopback_addr, PORT1).setConnExpireTimeout(120000).setUseSendQueues(false);
+        ct1.setReaperInterval(60000);
         ct1.start();
-        ct2=new TCPConnectionMap("ConnectionMapTest2",
-                                 new DefaultThreadFactory("ConnectionMapTest", true),
-                                 new DummyReceiver(), loopback_addr, null, 0, PORT2, PORT2, 60000, 120000);
+        ct2=new TCPConnectionMap(loopback_addr, PORT2).setUseSendQueues(false).setConnExpireTimeout(120000);
+        ct2.setReaperInterval(60000);
         ct2.start();
         _testStop(ct1, ct2);
     }
 
-
-   /* public void testStopConnectionMapNIONoSendQueues() throws Exception {
-        ct1=new ConnectionTableNIO(new DummyReceiver(), loopback_addr, null, PORT1, PORT1, 60000, 120000, false);
-        ct1.setUseSendQueues(false);       
-        ct2=new ConnectionTableNIO(new DummyReceiver(), loopback_addr, null, PORT2, PORT2, 60000, 120000, false);
-        ct2.setUseSendQueues(false);
-        ct1.start();
-        ct2.start();
-        _testStop(ct1, ct2);
-    }
-
-
-    public void testStopConnectionMapNIOWithSendQueues() throws Exception {
-        ct1=new ConnectionTableNIO(new DummyReceiver(), loopback_addr, null, PORT1, PORT1, 60000, 120000, false);
-        ct2=new ConnectionTableNIO(new DummyReceiver(), loopback_addr, null, PORT2, PORT2, 60000, 120000, false);
-        ct1.start();
-        ct2.start();
-        _testStop(ct1, ct2);
-    }*/
 
 
     private void _testStop(TCPConnectionMap table1, TCPConnectionMap table2) throws Exception {
@@ -205,13 +166,5 @@ public class ConnectionMapTest {
         assert table2.getNumConnections() == 0  : "table2 should have 0 connections: " + table2;
     }
 
-
-
-
-    static class DummyReceiver implements TCPConnectionMap.Receiver {
-        public void receive(Address sender, byte[] data, int offset, int length) {
-            System.out.println("-- received " + length + " bytes from " + sender);
-        }
-    }
 
 }
