@@ -5,18 +5,18 @@ import java.nio.ByteBuffer;
 /**
  * NIO based server interface for sending byte[] buffers to a single or all members and for receiving byte[] buffers.
  * Implementations should be able to be used to provide light weight NIO servers.
- * @param <T> The type of the address, e.g. {@link org.jgroups.Address}
+ * @param <A> The type of the address, e.g. {@link org.jgroups.Address}
  * @author Bela Ban
  * @since  3.6.5
  */
 
-public interface Server<T> {
+public interface Server<A> {
 
     /**
      * Sets a receiver
      * @param receiver The receiver
      */
-    void setReceiver(Receiver<T> receiver);
+    void setReceiver(Receiver<A> receiver);
 
     /**
      * Starts the server. Implementations will typically create a socket and start a select loop. Note that start()
@@ -34,12 +34,12 @@ public interface Server<T> {
      * @param offset The offset into the buffer
      * @param length The number of bytes to be sent
      */
-    void send(T dest, byte[] buf, int offset, int length);
+    void send(A dest, byte[] buf, int offset, int length);
 
     /**
      * Sends a message to a destination
      * @param dest The destination. If null, the message should be sent to all members
      * @param buf The buffer to be sent
      */
-    void send(T dest, ByteBuffer buf);
+    void send(A dest, ByteBuffer buf);
 }

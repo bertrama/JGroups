@@ -4,11 +4,11 @@ import java.nio.ByteBuffer;
 
 /**
  * Receiver interface to be used with {@link Server} implementations
- * @param <T> The type of the address, e.g. {@link org.jgroups.Address}
+ * @param <A> The type of the address, e.g. {@link org.jgroups.Address}
  * @author Bela Ban
  * @since  3.6.5
  */
-public interface Receiver<T> {
+public interface Receiver<A> {
 
     /**
      * Delivers a message from a given sender to the application
@@ -19,7 +19,7 @@ public interface Receiver<T> {
      * @param offset The offset at which the received data starts
      * @param length The length of the received data
      */
-    void receive(T sender, byte[] buf, int offset, int length);
+    void receive(A sender, byte[] buf, int offset, int length);
 
     /**
      * Delivers a message from a given sender to the application
@@ -29,5 +29,5 @@ public interface Receiver<T> {
      *            When buf is not referenced any longer, it can get garbage collected.<p/>
      *            Note that buf could be a direct ByteBuffer.
      */
-    void receive(T sender, ByteBuffer buf); // should be a default method in Java 8
+    void receive(A sender, ByteBuffer buf); // should be a default method in Java 8
 }

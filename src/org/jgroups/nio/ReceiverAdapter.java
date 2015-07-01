@@ -7,8 +7,8 @@ import java.nio.ByteBuffer;
  * @author Bela Ban
  * @since  3.6.5
  */
-public class ReceiverAdapter<T> implements Receiver<T> {
-    public void receive(T sender, byte[] buf, int offset, int length) {
+public class ReceiverAdapter<A> implements Receiver<A> {
+    public void receive(A sender, byte[] buf, int offset, int length) {
 
     }
 
@@ -18,7 +18,7 @@ public class ReceiverAdapter<T> implements Receiver<T> {
      * @param sender
      * @param buf
      */
-    public void receive(T sender, ByteBuffer buf) {
+    public void receive(A sender, ByteBuffer buf) {
         if(buf == null)
             return;
         int offset=buf.hasArray()? buf.arrayOffset() : 0,
