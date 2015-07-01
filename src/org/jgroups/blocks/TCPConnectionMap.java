@@ -187,13 +187,9 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
     @Override
     public TCPConnection getConnection(Address dest) throws Exception {
         TCPConnection conn;
-        lock.lock();
-        try {
+        synchronized(this) {
             if((conn=conns.get(dest)) != null && conn.isOpen()) // keep FAST path on the most common case
                 return conn;
-        }
-        finally {
-            lock.unlock();
         }
 
         Exception connect_exception=null; // set if connect() throws an exception
@@ -203,8 +199,7 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
             // extra check in conn map and closing the new connection, w/ sock_creation_lock it looks much simpler
             // (slow path, so not important)
 
-            lock.lock();
-            try {
+            synchronized(this) {
                 conn=conns.get(dest); // check again after obtaining sock_creation_lock
                 if(conn != null && conn.isOpen())
                     return conn;
@@ -213,22 +208,18 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
                 conn=new TCPConnection(dest);
                 addConnection(dest, conn);
             }
-            finally {
-                lock.unlock();
-            }
 
             // now connect to dest:
             try {
                 log.trace("%s: connecting to %s", local_addr, dest);
                 conn.connect(new InetSocketAddress(((IpAddress)dest).getIpAddress(), ((IpAddress)dest).getPort()));
-                conn.start(getThreadFactory());
+                conn.start(factory);
             }
             catch(Exception connect_ex) {
                 connect_exception=connect_ex;
             }
 
-            lock.lock();
-            try {
+            synchronized(this) {
                 TCPConnection existing_conn=conns.get(dest); // check again after obtaining sock_creation_lock
                 if(existing_conn != null && existing_conn.isOpen() // added by a successful accept()
                   && existing_conn != conn) {
@@ -243,9 +234,6 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
                     throw connect_exception;
                 }
                 return conn;
-            }
-            finally {
-                lock.unlock();
             }
         }
         finally {
@@ -317,23 +305,19 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
                 conn=new TCPConnection(client_sock);
                 Address peer_addr=conn.getPeerAddress();
                 log.trace("%s: %s trying to connect to me", local_addr, peer_addr);
-                lock.lock();
-                try {
+                synchronized(this) {
                     boolean conn_exists=hasConnection(peer_addr),
                       replace=conn_exists && local_addr.compareTo(peer_addr) < 0; // bigger conn wins
 
                     if(!conn_exists || replace) {
                         addConnection(peer_addr, conn); // closes old conn
-                        conn.start(getThreadFactory());
+                        conn.start(factory);
                         log.trace("%s: accepted connection from %s %s", local_addr, peer_addr, explanation(conn_exists, replace));
                     }
                     else {
                         log.trace("%s: rejected connection from %s %s", local_addr, peer_addr, explanation(conn_exists, replace));
                         Util.close(conn); // keep our existing conn, reject accept() and close client_sock
                     }
-                }
-                finally {
-                    lock.unlock();
                 }
             }
             catch(Exception ex) {
