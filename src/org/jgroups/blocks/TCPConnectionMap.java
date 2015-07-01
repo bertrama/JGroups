@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Vladimir Blagojevic
  * @author Bela Ban
  */
-public class TCPConnectionMap extends AbstractConnectionMap<Address,TCPConnectionMap.TCPConnection> {
+public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCPConnection> {
     protected InetAddress         client_bind_addr;
     protected int                 client_bind_port;
     protected boolean             defer_client_binding;

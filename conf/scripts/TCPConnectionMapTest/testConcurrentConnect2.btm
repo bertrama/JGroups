@@ -34,7 +34,7 @@ ENDRULE
 
 ## Blocks the 2 sender threads just before connect(), however the conn-stubs have already been added to connections
 RULE beforeConnect
-CLASS TCPConnectionMap$Mapper
+CLASS TCPConnectionMap
 METHOD getConnection
 AT INVOKE TCPConnectionMap$TCPConnection.connect
 IF TRUE
@@ -62,7 +62,7 @@ ENDRULE
 #CLASS TCPConnectionMap
 #HELPER org.jgroups.tests.helpers.TCPConnectionMapTestHelper
 #METHOD send
-#AFTER INVOKE TCPConnectionMap$Mapper.getConnection
+#AFTER INVOKE TCPConnectionMap.getConnection
 #BIND local_addr=$0.local_addr;
 #IF isA(local_addr)
 #  DO System.out.println(": DELAYING sending a bit, local=" + local_addr);

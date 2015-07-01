@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @param <A> The type of the address, e.g. {@link Address}
  * @param <V> The type of the connection, e.g. {@link org.jgroups.blocks.TCPConnectionMap.TCPConnection}
  */
-public abstract class AbstractConnectionMap<A extends Address, V extends Connection> {
+public abstract class ConnectionMap<A extends Address, V extends Connection> {
         
     protected final List<ConnectionMapListener<A,V>> conn_listeners=new ArrayList<>();
     protected final Map<A,V>                         conns=new HashMap<>();
@@ -25,11 +25,11 @@ public abstract class AbstractConnectionMap<A extends Address, V extends Connect
     protected long                                   reaperInterval;
     protected final Reaper                           reaper;
 
-    public AbstractConnectionMap(ThreadFactory factory) {
+    public ConnectionMap(ThreadFactory factory) {
         this(factory,0);        
     }
     
-    public AbstractConnectionMap(ThreadFactory factory, long reaperInterval) {
+    public ConnectionMap(ThreadFactory factory, long reaperInterval) {
         super();
         this.factory=factory;        
         this.reaperInterval=reaperInterval;
@@ -37,7 +37,7 @@ public abstract class AbstractConnectionMap<A extends Address, V extends Connect
     }
 
     public long getReaperInterval() {return reaperInterval;}
-    public AbstractConnectionMap<A,V> setReaperInterval(long interval) {this.reaperInterval=interval; return this;}
+    public ConnectionMap<A,V> setReaperInterval(long interval) {this.reaperInterval=interval; return this;}
 
     public void start() throws Exception {
         if(reaper != null)
