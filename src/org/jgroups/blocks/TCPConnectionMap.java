@@ -2,8 +2,6 @@ package org.jgroups.blocks;
 
 import org.jgroups.Address;
 import org.jgroups.Version;
-import org.jgroups.logging.Log;
-import org.jgroups.logging.LogFactory;
 import org.jgroups.stack.IpAddress;
 import org.jgroups.util.*;
 
@@ -28,7 +26,6 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
     protected final ServerSocket  srv_sock;
     protected Receiver            recvr;
     protected long                conn_expire_time;  // ns
-    protected Log                 log=LogFactory.getLog(getClass());
     protected int                 recv_buf_size=120000;
     protected int                 send_buf_size=60000;
     protected int                 send_queue_size=2000;
@@ -93,7 +90,6 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
     public TCPConnectionMap  setSendQueueSize(int send_queue_size)   {this.send_queue_size = send_queue_size; return this;}
     public TCPConnectionMap  setUseSendQueues(boolean flag)          {this.use_send_queues=flag; return this;}
     public int               getSenderQueueSize()                    {return send_queue_size;}
-    public TCPConnectionMap  log(Log new_log)                        {this.log=new_log; return this;}
 
 
     public void start() throws Exception {
@@ -115,6 +111,9 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
         }
     }
 
+    protected TCPConnection createConnection(Address dest) throws Exception {
+        return new TCPConnection(dest);
+    }
 
     /**
      * Calls the receiver callback. We do not serialize access to this method,
@@ -176,70 +175,7 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
         }
     }
 
-    /** Flushes the TCPConnection associated with destination */
-    public void flush(Address destination) throws Exception {
-        TCPConnection conn=getConnection(destination);
-        if(conn != null)
-            conn.flush();
-    }
 
-
-    @Override
-    public TCPConnection getConnection(Address dest) throws Exception {
-        TCPConnection conn;
-        synchronized(this) {
-            if((conn=conns.get(dest)) != null && conn.isOpen()) // keep FAST path on the most common case
-                return conn;
-        }
-
-        Exception connect_exception=null; // set if connect() throws an exception
-        sock_creation_lock.lockInterruptibly();
-        try {
-            // lock / release, create new conn under sock_creation_lock, it can be skipped but then it takes
-            // extra check in conn map and closing the new connection, w/ sock_creation_lock it looks much simpler
-            // (slow path, so not important)
-
-            synchronized(this) {
-                conn=conns.get(dest); // check again after obtaining sock_creation_lock
-                if(conn != null && conn.isOpen())
-                    return conn;
-
-                // create conn stub
-                conn=new TCPConnection(dest);
-                addConnection(dest, conn);
-            }
-
-            // now connect to dest:
-            try {
-                log.trace("%s: connecting to %s", local_addr, dest);
-                conn.connect(new InetSocketAddress(((IpAddress)dest).getIpAddress(), ((IpAddress)dest).getPort()));
-                conn.start(factory);
-            }
-            catch(Exception connect_ex) {
-                connect_exception=connect_ex;
-            }
-
-            synchronized(this) {
-                TCPConnection existing_conn=conns.get(dest); // check again after obtaining sock_creation_lock
-                if(existing_conn != null && existing_conn.isOpen() // added by a successful accept()
-                  && existing_conn != conn) {
-                    log.trace("%s: found existing connection to %s, using it and deleting own conn-stub", local_addr, dest);
-                    Util.close(conn); // close our connection; not really needed as conn was closed by accept()
-                    return existing_conn;
-                }
-
-                if(connect_exception != null) {
-                    log.trace("%s: failed connecting to %s: %s", local_addr, dest, connect_exception);
-                    removeConnectionIfPresent(dest, conn); // removes and closes the conn
-                    throw connect_exception;
-                }
-                return conn;
-            }
-        }
-        finally {
-            sock_creation_lock.unlock();
-        }
-    }
 
     public String toString() {
         return new StringBuilder("local_addr=").append(local_addr).append("\n")
@@ -311,7 +247,7 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
 
                     if(!conn_exists || replace) {
                         addConnection(peer_addr, conn); // closes old conn
-                        conn.start(factory);
+                        conn.start();
                         log.trace("%s: accepted connection from %s %s", local_addr, peer_addr, explanation(conn_exists, replace));
                     }
                     else {
@@ -344,7 +280,7 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
 
 
     
-    public class TCPConnection implements Connection {
+    public class TCPConnection implements Connection<Address> {
         protected final Socket           sock; // socket to/from peer (result of srv_sock.accept() or new Socket())
         protected final ReentrantLock    send_lock=new ReentrantLock(); // serialize send()
         protected final byte[]           cookie= { 'b', 'e', 'l', 'a' };
@@ -355,7 +291,7 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
         protected Sender                 sender;
         protected Receiver               receiver;
 
-        /** Creates a connection stub and binds it, use {@link #connect(java.net.SocketAddress)} to connect */
+        /** Creates a connection stub and binds it, use {@link #connect(Address)} to connect */
         public TCPConnection(Address peer_addr) throws Exception {
             if(peer_addr == null)
                 throw new IllegalArgumentException("Invalid parameter peer_addr="+ peer_addr);
@@ -401,7 +337,8 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
         }
 
         /** Called after {@link TCPConnection#TCPConnection(org.jgroups.Address)} */
-        protected void connect(SocketAddress destAddr) throws Exception {
+        public void connect(Address dest) throws Exception {
+            SocketAddress destAddr=new InetSocketAddress(((IpAddress)dest).getIpAddress(), ((IpAddress)dest).getPort());
             try {
                 if(!defer_client_binding)
                     this.sock.bind(new InetSocketAddress(client_bind_addr, client_bind_port));
@@ -419,17 +356,16 @@ public class TCPConnectionMap extends ConnectionMap<Address,TCPConnectionMap.TCP
         }
 
 
-        protected TCPConnection start(ThreadFactory f) {
+        public void start() {
             if(receiver != null)
                 receiver.stop();
-            receiver=new Receiver(f).start();
+            receiver=new Receiver(TCPConnectionMap.this.factory).start();
 
             if(isSenderUsed()) {
                 if(sender != null)
                     sender.stop();
-                sender=new Sender(f, getSenderQueueSize()).start();
+                sender=new Sender(TCPConnectionMap.this.factory, getSenderQueueSize()).start();
             }
-            return this;
         }
         
 

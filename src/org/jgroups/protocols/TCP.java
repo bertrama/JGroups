@@ -62,7 +62,7 @@ public class TCP extends BasicTCP implements TCPConnectionMap.Receiver {
     public void start() throws Exception {
         ct=new TCPConnectionMap("jgroups.tcp.srv_sock", getThreadFactory(), getSocketFactory(), this,
                                 bind_addr, external_addr, external_port, bind_port, bind_port+port_range, reaper_interval, conn_expire_time)
-          .log(log).timeService(time_service)
+          .timeService(time_service)
           .setReceiveBufferSize(recv_buf_size).setSendQueueSize(send_queue_size)
           .setUseSendQueues(use_send_queues).setSendBufferSize(send_buf_size)
           .setSocketConnectionTimeout(sock_conn_timeout)
@@ -70,6 +70,7 @@ public class TCP extends BasicTCP implements TCPConnectionMap.Receiver {
           .setTcpNodelay(tcp_nodelay).setLinger(linger)
           .setSocketFactory(getSocketFactory())
           .clientBindAddress(client_bind_addr).clientBindPort(client_bind_port).deferClientBinding(defer_client_bind_addr);
+        ct.log(this.log);
 
         if(reaper_interval > 0 || conn_expire_time > 0) {
             if(reaper_interval == 0) {
